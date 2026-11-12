@@ -1,0 +1,47 @@
+
+name: Build Redbull Kernel
+on: workflow_dispatch
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Free Disk Space
+        run: sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost /usr/local/lib/android
+
+      - name: Download Kernel Source
+        uses: actions/checkout@v4
+
+      - name: Install Build Tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl wget git ccache automake flex lzop bison gperf \
+          build-essential zip zlib1g-dev g++-multilib libxml2-utils bzip2 libbz2-dev \
+          squashfs-tools pngcrush schedtool dpkg-dev liblz4-tool make optipng \
+          libssl-dev pwgen libswitch-perl policycoreutils minicom libxml-sax-base-perl \
+          libxml-simple-perl bc libc6-dev-i386 lib32ncurses5-dev libx11-dev lib32z-dev \
+          libgl1-mesa-dev xsltproc unzip device-tree-compiler kmod python3
+
+      - name: Setup Proton Clang & Patch Kernel
+        run: |
+          sudo mkdir -p /root
+          sudo git clone https://github.com/kdrag0n/proton-clang.git --depth=1 /root/proton-clang
+          patch -p1 < add-rtl88xxau-5.6.4.2-drivers.patch
+          patch -p1 < add-wifi-injection-4.14.patch
+
+      - name: Compile Kernel
+        run: |
+          chmod +x 2.sh
+          sudo ./2.sh
+
+      - name: Package Flashable Zip
+        run: |
+          cp out/arch/arm64/boot/Image* flasher/ 2>/dev/null || true
+          cp out/arch/arm64/boot/dtbo.img flasher/ 2>/dev/null || true
+          cd flasher && zip -r9 ../redbull-nethunter-kernel.zip * -x .git README.md *placeholder
+
+      - name: Upload Kernel Zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: redbull-nethunter-kernel
+          path: redbull-nethunter-kernel.zip
